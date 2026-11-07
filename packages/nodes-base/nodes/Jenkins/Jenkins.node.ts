@@ -431,13 +431,26 @@ export class Jenkins implements INodeType {
 		loadOptions: {
 			async getJobs(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const returnData: INodePropertyOptions[] = [];
-				const endpoint = '/api/json';
-				const { jobs } = await jenkinsApiRequest.call(this, 'GET', endpoint);
-				for (const job of jobs) {
-					returnData.push({
-						name: job.name,
-						value: job.name,
-					});
+				const folders: string[][] = [[]];
+				for (const folder of folders) {
+					const folderPath = folder.map(encodeURIComponent).join('/job/');
+					const endpoint = folder.length ? `/job/${folderPath}/api/json` : '/api/json';
+					const { jobs }: { jobs: Array<{ name: string; jobs?: unknown[] }> } =
+						await jenkinsApiRequest.call(this, 'GET', endpoint, {
+							tree: 'jobs[name,jobs[name]]',
+						});
+					for (const job of jobs) {
+						const path = [...folder, job.name];
+						if (Array.isArray(job.jobs)) {
+							if (job.jobs.length) folders.push(path);
+							continue;
+						}
+						returnData.push({
+							name: path.join('/'),
+							// Keep saved top-level selections unchanged.
+							value: folder.length ? path.map(encodeURIComponent).join('/job/') : job.name,
+						});
+					}
 				}
 				returnData.sort((a, b) => {
 					if (a.name < b.name) {
@@ -454,8 +467,10 @@ export class Jenkins implements INodeType {
 			async getJobParameters(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
 				const job = this.getCurrentNodeParameter('job') as string;
 				const returnData: INodePropertyOptions[] = [];
-				const endpoint = `/job/${job}/api/json?tree=actions[parameterDefinitions[*]],property[parameterDefinitions[*]]`;
-				const result = await jenkinsApiRequest.call(this, 'GET', endpoint);
+				const endpoint = `/job/${job}/api/json`;
+				const result = await jenkinsApiRequest.call(this, 'GET', endpoint, {
+					tree: 'actions[parameterDefinitions[*]],property[parameterDefinitions[*]]',
+				});
 				const allParameters = [...(result.actions ?? []), ...(result.property ?? [])];
 				const seenParameterNames = new Set<string>();
 				for (const { _class, parameterDefinitions } of allParameters) {
@@ -540,7 +555,10 @@ export class Jenkins implements INodeType {
 						const queryParams = {
 							name,
 							mode: 'copy',
-							from: job,
+							// Copy uses a full job name, not a REST path.
+							from: job.includes('/job/')
+								? job.split('/job/').map(decodeURIComponent).join('/')
+								: job,
 						};
 
 						const endpoint = '/createItem';
@@ -634,15 +652,16 @@ export class Jenkins implements INodeType {
 				if (resource === 'build') {
 					if (operation === 'getAll') {
 						const job = this.getNodeParameter('job', i) as string;
-						let endpoint = `/job/${job}/api/json?tree=builds[*]`;
+						const endpoint = `/job/${job}/api/json`;
+						let tree = 'builds[*]';
 						const returnAll = this.getNodeParameter('returnAll', i);
 
 						if (!returnAll) {
 							const limit = this.getNodeParameter('limit', i);
-							endpoint += `{0,${limit}}`;
+							tree += `{0,${limit}}`;
 						}
 
-						responseData = await jenkinsApiRequest.call(this, 'GET', endpoint);
+						responseData = await jenkinsApiRequest.call(this, 'GET', endpoint, { tree });
 						responseData = responseData.builds;
 					}
 				}

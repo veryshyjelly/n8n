@@ -1,7 +1,12 @@
 # Local replacement
 
+For current source builds, fresh installations, and updates to `~/n8n`, follow the
+[installation and update guide](../../INSTALL.md).
+The migration steps below describe the original 2.46.6-to-2.47.0 cutover.
+Use them only when the original containers and data volume are still the migration source.
+
 Set `N8N_LOCAL_LICENSE_OVERRIDE_ENABLED=true` to enable local enterprise features.
-The default is `false`. Restart n8n after you change this value.
+The default is `false`. Run `docker compose up -d` after you change this value in the deployment configuration.
 The flag applies in production and development.
 It does not provide hosted AI services or Gateway credits.
 Existing AI provider settings and setup checks still apply.
@@ -18,29 +23,23 @@ The adapter does not activate, renew, or report usage to the license server.
 It does not issue a signed certificate or a management token.
 Stored certificates stay unchanged. Set the flag to `false` to restore normal licensing.
 
-## Prepare
+## Prepare the original installation
 
-Use workspace-local pnpm 12.4.2. Install with the frozen lockfile.
-Run the repository build scripts. Save their output to logs.
-Set these values before you run `pnpm build:docker`:
-
-```sh
-export DOCKER_PLATFORM=linux/arm64
-export IMAGE_BASE_NAME=local/n8n
-export RUNNERS_IMAGE_BASE_NAME=local/n8n-runners
-export IMAGE_TAG="2.47.0-$(git rev-parse --short HEAD)"
-pnpm build:docker > .build/logs/docker-build.log 2>&1
-```
-
-The two-component image names keep the images local.
-Do not use a registry prefix.
+Build both images with the [source build instructions](../../INSTALL.md#build-the-images).
+Keep `IMAGE_TAG` set to the tag from that build.
 
 Run `node docker/local-override/prepare.mjs` to save the current environment.
 This writes private files with mode `0600` under the ignored `.build/local-deployment` directory.
 The Compose definition keeps port 5678 and the existing `n8n_default` network.
 The existing sandbox and SearXNG containers stay running.
 
-Create `.build/local-deployment/compose.env` with `N8N_LOCAL_IMAGE_TAG` set to the image tag.
+Create `.build/local-deployment/compose.env` with `N8N_LOCAL_IMAGE_TAG` set to the image tag:
+
+```sh
+umask 077
+printf 'N8N_LOCAL_IMAGE_TAG=%s\n' "$IMAGE_TAG" > .build/local-deployment/compose.env
+```
+
 Use this command for the replacement:
 
 ```sh

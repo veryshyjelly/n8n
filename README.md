@@ -15,22 +15,13 @@ Fair-code platform to build and deploy AI agents and workflows. Combine a visual
 - **Enterprise-Ready AI**: Self-host or deploy securely with role-based access, audit trails, and support for sensitive data
 - **Leverage What Already Exists**: 1500+ integrations and 9,000+ workflow [templates](https://n8n.io/workflows) to connect AI with your existing systems
 
-## Quick Start
+## Install this fork
 
-Try n8n instantly with our install script (requires [Docker](https://www.docker.com/)):
+Follow the [installation and update guide](INSTALL.md) to build this fork's application and task runner images.
+The guide covers a fresh installation and updates to the existing `~/n8n` deployment.
 
-```sh
-curl -fsSL https://get.n8n.io | sh
-```
-
-Or deploy manually with [Docker](https://docs.n8n.io/hosting/installation/docker/):
-
-```
-docker volume create n8n_data
-docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n
-```
-
-Access the editor at http://localhost:5678
+This fork includes nested Jenkins jobs, queue tracking details, and support for saved Jenkins credentials in HTTP Request nodes.
+After installation, open the editor at http://localhost:5678.
 
 ## Resources
 

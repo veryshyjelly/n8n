@@ -1,0 +1,39 @@
+name: n8n-local
+
+services:
+  n8n:
+    image: local/n8n:${N8N_LOCAL_IMAGE_TAG:?Set N8N_LOCAL_IMAGE_TAG}
+    platform: linux/arm64
+    env_file:
+      - path: ../../.build/local-deployment/app.env
+        format: raw
+    environment:
+      N8N_VERSION: '2.47.0'
+      N8N_LOCAL_LICENSE_OVERRIDE_ENABLED: 'true'
+    ports:
+      - '5678:5678'
+    volumes:
+      - data:/home/node/.n8n
+    networks:
+      - existing
+
+  runners:
+    image: local/n8n-runners:${N8N_LOCAL_IMAGE_TAG:?Set N8N_LOCAL_IMAGE_TAG}
+    platform: linux/arm64
+    env_file:
+      - path: ../../.build/local-deployment/runners.env
+        format: raw
+    depends_on:
+      - n8n
+    networks:
+      - existing
+
+volumes:
+  data:
+    external: true
+    name: n8n_local_2470_data
+
+networks:
+  existing:
+    external: true
+    name: n8n_default

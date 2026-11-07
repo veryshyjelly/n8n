@@ -21,6 +21,7 @@ import { InstanceSettings } from 'n8n-core';
 import { LicenseMetricsService } from '@/metrics/license-metrics.service';
 
 import { N8N_VERSION, SETTINGS_LICENSE_CERT_KEY } from './constants';
+import { LocalLicense, type LicenseAdapter } from './license/local-license';
 
 const LICENSE_RENEWAL_DISABLED_WARNING =
 	'Automatic license renewal is disabled. The license will not renew automatically, and access to licensed features may be lost!';
@@ -53,7 +54,7 @@ function isMainPlanFlag(entitlement: TEntitlement): boolean | undefined {
 
 @Service()
 export class License implements LicenseProvider {
-	private manager: LicenseManager | undefined;
+	private manager: LicenseAdapter | undefined;
 
 	private isShuttingDown = false;
 
@@ -83,6 +84,12 @@ export class License implements LicenseProvider {
 		}
 		if (this.isShuttingDown) {
 			this.logger.warn('License manager already shutting down');
+			return;
+		}
+
+		if (this.globalConfig.license.localOverrideEnabled) {
+			this.manager = new LocalLicense();
+			this.logger.info('Local license override enabled');
 			return;
 		}
 
@@ -213,7 +220,7 @@ export class License implements LicenseProvider {
 
 	async saveCertStr(value: TLicenseBlock): Promise<void> {
 		// if we have an ephemeral license, we don't want to save it to the database
-		if (this.globalConfig.license.cert) return;
+		if (this.globalConfig.license.localOverrideEnabled || this.globalConfig.license.cert) return;
 		await this.settingsRepository.upsert(
 			{
 				key: SETTINGS_LICENSE_CERT_KEY,

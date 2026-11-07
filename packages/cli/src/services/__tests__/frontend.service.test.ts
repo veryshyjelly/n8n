@@ -2,7 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mock } from 'vitest';
-import type { LicenseState, Logger, ModuleRegistry } from '@n8n/backend-common';
+import { LicenseState, type Logger, type ModuleRegistry } from '@n8n/backend-common';
+import { mockLogger } from '@n8n/backend-test-utils';
 import type { GlobalConfig, SecurityConfig } from '@n8n/config';
 import type { WorkflowRepository } from '@n8n/db';
 import { Container } from '@n8n/di';
@@ -86,6 +87,7 @@ describe('FrontendService', () => {
 		},
 		ai: { allowSendingParameterValues: true },
 		aiAssistant: { baseUrl: '' },
+		aiBuilder: { apiKey: '' },
 		aiGateway: { enabled: false },
 		evaluation: {
 			collectionsEnabled: false,
@@ -210,7 +212,10 @@ describe('FrontendService', () => {
 	const workflowReviewPolicyService = mock<WorkflowReviewPolicyService>();
 	const inboxService = mock<InboxService>();
 
-	const createMockService = () => {
+	const createMockService = (
+		activeLicense: License = license,
+		activeLicenseState: LicenseState = licenseState,
+	) => {
 		Container.set(
 			CommunityPackagesConfig,
 			mock<CommunityPackagesConfig>({
@@ -219,7 +224,7 @@ describe('FrontendService', () => {
 		);
 		// isApiKeyAuthEnabled() reads License via the container directly, so the
 		// constructor-injected mock above must also be registered here.
-		Container.set(License, license);
+		Container.set(License, activeLicense);
 
 		// Suppress the constructor's background write so it cannot outlive the test.
 		// Restore the method so tests and reload handlers can call it explicitly.
@@ -234,14 +239,14 @@ describe('FrontendService', () => {
 					loadNodesAndCredentials,
 					credentialTypes,
 					credentialsOverwrites,
-					license,
+					activeLicense,
 					mailer,
 					instanceSettings,
 					urlService,
 					securityConfig,
 					pushConfig,
 					binaryDataConfig,
-					licenseState,
+					activeLicenseState,
 					moduleRegistry,
 					mfaService,
 					ownershipService,
@@ -294,6 +299,44 @@ describe('FrontendService', () => {
 	});
 
 	describe('getSettings', () => {
+		it('serves local features and preserves setup gates', async () => {
+			const activeConfig = mock<GlobalConfig>({ license: { localOverrideEnabled: true } });
+			const activeLicense = new License(
+				mockLogger(),
+				instanceSettings,
+				mock(),
+				mock(),
+				activeConfig,
+			);
+			await activeLicense.init();
+			const activeState = new LicenseState();
+			activeState.setLicenseProvider(activeLicense);
+			const { service } = createMockService(activeLicense, activeState);
+
+			const settings = await service.getSettings();
+
+			expect(settings.enterprise).toMatchObject({
+				sharing: true,
+				variables: true,
+				externalSecrets: true,
+				sourceControl: true,
+				customRoles: true,
+				showNonProdBanner: false,
+				provisioning: false,
+				projects: { team: { limit: -1 } },
+			});
+			expect(settings.variables.limit).toBe(-1);
+			expect(settings.folders.enabled).toBe(true);
+			expect(settings.evaluation.quota).toBe(-1);
+			expect(settings.publicApi.enabled).toBe(true);
+			expect(settings.sso.saml.loginEnabled).toBe(false);
+			expect(settings.sso.oidc.loginEnabled).toBe(false);
+			expect(settings.aiCredits).toMatchObject({ enabled: false, credits: 0 });
+			expect(settings.aiGateway?.enabled).not.toBe(true);
+			expect(settings.aiBuilder).toMatchObject({ enabled: true, setup: false });
+			expect(settings.workerPools.enabled).toBe(false);
+		});
+
 		it('refreshes Inbox availability from registered sources on each request', async () => {
 			moduleRegistry.isActive.mockReturnValue(true);
 			inboxService.getSettings

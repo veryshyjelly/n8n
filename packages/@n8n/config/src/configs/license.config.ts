@@ -2,6 +2,13 @@ import { Config, Env } from '../decorators';
 
 @Config
 export class LicenseConfig {
+	/**
+	 * Whether to enable locally implemented enterprise features without a license server.
+	 * This doesn't provide hosted AI services or Gateway credits. Restart n8n after you change this setting.
+	 */
+	@Env('N8N_LOCAL_LICENSE_OVERRIDE_ENABLED')
+	localOverrideEnabled: boolean = false;
+
 	/** URL of the license server used to validate and refresh licenses. */
 	@Env('N8N_LICENSE_SERVER_URL')
 	serverUrl: string = 'https://license.n8n.io/v1';

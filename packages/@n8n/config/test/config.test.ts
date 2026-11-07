@@ -546,6 +546,7 @@ describe('GlobalConfig', () => {
 			gracefulShutdownTimeout: 30,
 		},
 		license: {
+			localOverrideEnabled: false,
 			serverUrl: 'https://license.n8n.io/v1',
 			autoRenewalEnabled: true,
 			detachFloatingOnShutdown: true,

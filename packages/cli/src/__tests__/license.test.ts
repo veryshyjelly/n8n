@@ -61,6 +61,7 @@ function mockEntitlements(license: License, entitlements: TEntitlement[]) {
 }
 
 const licenseConfig: GlobalConfig['license'] = {
+	localOverrideEnabled: false,
 	serverUrl: MOCK_SERVER_URL,
 	autoRenewalEnabled: true,
 	detachFloatingOnShutdown: true,

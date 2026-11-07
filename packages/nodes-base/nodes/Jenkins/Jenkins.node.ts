@@ -520,8 +520,8 @@ export class Jenkins implements INodeType {
 					if (operation === 'trigger') {
 						const job = this.getNodeParameter('job', i) as string;
 						const endpoint = `/job/${job}/build`;
-						await jenkinsApiRequest.call(this, 'POST', endpoint);
-						responseData = { success: true };
+						const result = await jenkinsApiRequest.call(this, 'POST', endpoint);
+						responseData = { success: true, ...result };
 					}
 					if (operation === 'triggerParams') {
 						const job = this.getNodeParameter('job', i) as string;
@@ -534,7 +534,7 @@ export class Jenkins implements INodeType {
 							}, {});
 						}
 						const endpoint = `/job/${job}/buildWithParameters`;
-						await jenkinsApiRequest.call(
+						const result = await jenkinsApiRequest.call(
 							this,
 							'POST',
 							endpoint,
@@ -547,7 +547,7 @@ export class Jenkins implements INodeType {
 								},
 							},
 						);
-						responseData = { success: true };
+						responseData = { success: true, ...result };
 					}
 					if (operation === 'copy') {
 						const job = this.getNodeParameter('job', i) as string;

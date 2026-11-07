@@ -40,6 +40,67 @@ const redirectError = (statusCode: number, location: string) =>
 	httpError(statusCode, '', { location });
 
 describe('jenkinsApiRequest', () => {
+	it.each(['build', 'buildWithParameters'])(
+		'returns tracking details from a 201 %s response',
+		async (operation) => {
+			const executeFunctions = createExecuteFunctions();
+			executeFunctions.helpers.request.mockResolvedValue({
+				statusCode: 201,
+				headers: { location: '/queue/item/123/' },
+				body: '',
+			});
+
+			await expect(
+				jenkinsApiRequest.call(executeFunctions, 'POST', `/job/my-job/${operation}`),
+			).resolves.toEqual({
+				success: true,
+				queueId: 123,
+				queueUrl: 'https://jenkins.example.com/queue/item/123/',
+			});
+			expect(executeFunctions.helpers.request).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({
+					resolveWithFullResponse: true,
+					followRedirect: false,
+					followAllRedirects: false,
+				}),
+			);
+		},
+	);
+
+	it('keeps successful triggers without a Location header compatible', async () => {
+		const executeFunctions = createExecuteFunctions();
+		executeFunctions.helpers.request.mockResolvedValue({ statusCode: 201, headers: {}, body: '' });
+
+		await expect(
+			jenkinsApiRequest.call(executeFunctions, 'POST', '/job/my-job/build'),
+		).resolves.toEqual({ success: true });
+	});
+
+	it('preserves ordinary response bodies for other requests', async () => {
+		const executeFunctions = createExecuteFunctions();
+		const response = {
+			id: 123,
+			executable: { number: 55, url: 'https://jenkins.example.com/job/my-job/55/' },
+		};
+		executeFunctions.helpers.request.mockResolvedValue(response);
+
+		await expect(
+			jenkinsApiRequest.call(executeFunctions, 'GET', '/queue/item/123/api/json'),
+		).resolves.toEqual(response);
+		expect(executeFunctions.helpers.request.mock.calls[0][0]).not.toHaveProperty(
+			'resolveWithFullResponse',
+		);
+	});
+
+	it('does not treat queue redirects from other operations as a successful trigger', async () => {
+		const executeFunctions = createExecuteFunctions();
+		executeFunctions.helpers.request.mockRejectedValue(redirectError(302, '/queue/item/123/'));
+
+		await expect(jenkinsApiRequest.call(executeFunctions, 'GET', '/api/json')).rejects.toThrow(
+			NodeApiError,
+		);
+	});
+
 	it('removes a trailing slash from the credential base URL', async () => {
 		const executeFunctions = mockDeep<IExecuteFunctions>();
 		executeFunctions.getCredentials.mockResolvedValue({
@@ -191,6 +252,7 @@ describe('jenkinsApiRequest', () => {
 
 			expect(result).toEqual({
 				success: true,
+				queueId: 42,
 				queueUrl: 'https://jenkins.example.com/queue/item/42/',
 			});
 		});
@@ -264,6 +326,7 @@ describe('jenkinsApiRequest', () => {
 
 				expect(result).toEqual({
 					success: true,
+					queueId: 42,
 					queueUrl: 'https://jenkins.example.com/queue/item/42/',
 				});
 			},
@@ -284,6 +347,7 @@ describe('jenkinsApiRequest', () => {
 
 			expect(result).toEqual({
 				success: true,
+				queueId: 7,
 				queueUrl: 'https://example.com/jenkins/queue/item/7',
 			});
 		});
@@ -301,6 +365,7 @@ describe('jenkinsApiRequest', () => {
 
 			expect(result).toEqual({
 				success: true,
+				queueId: 77,
 				queueUrl: 'https://jenkins.example.com/queue/item/77/',
 			});
 		});
@@ -338,7 +403,7 @@ describe('jenkinsApiRequest', () => {
 
 				const result = await jenkinsApiRequest.call(executeFunctions, 'POST', '/job/my-job/build');
 
-				expect(result).toEqual({ success: true, queueUrl: location });
+				expect(result).toEqual({ success: true, queueId: 7, queueUrl: location });
 			},
 		);
 

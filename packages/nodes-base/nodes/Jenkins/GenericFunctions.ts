@@ -57,17 +57,16 @@ function isMissingCrumbError(error: JsonObject): boolean {
 }
 
 /**
- * Jenkins answers build triggers with a redirect to the queued item. Returns the queue
- * item URL when the redirect points to one.
+ * Read the queue item URL from an accepted build response.
  */
-function getQueueItemUrl(error: JsonObject, baseUrl: string): string | undefined {
-	const response = error.response as JsonObject | undefined;
-	const rawStatusCode = error.statusCode ?? error.httpCode ?? error.status ?? response?.status;
-	if (![302, 303].includes(Number(rawStatusCode))) {
+function getQueueItemUrl(result: JsonObject, baseUrl: string): string | undefined {
+	const response = result.response as JsonObject | undefined;
+	const rawStatusCode = result.statusCode ?? result.httpCode ?? result.status ?? response?.status;
+	if (![201, 302, 303].includes(Number(rawStatusCode))) {
 		return undefined;
 	}
 
-	const headers = (response?.headers ?? error.headers ?? {}) as Record<string, string | undefined>;
+	const headers = (response?.headers ?? result.headers ?? {}) as Record<string, string | undefined>;
 	const location = headers.location ?? headers.Location;
 	if (typeof location !== 'string') {
 		return undefined;
@@ -96,6 +95,13 @@ export async function jenkinsApiRequest(
 ): Promise<any> {
 	const credentials = await this.getCredentials('jenkinsApi');
 	const baseUrl = (credentials.baseUrl as string) || '';
+	const isBuildTrigger = method === 'POST' && /\/(?:build|buildWithParameters)$/.test(uri);
+	const triggerResult = (result: JsonObject = {}): IDataObject => {
+		const queueUrl = getQueueItemUrl(result, baseUrl);
+		if (!queueUrl) return { success: true };
+		const queueId = Number(new URL(queueUrl).pathname.split('/').filter(Boolean).pop());
+		return { success: true, queueId, queueUrl };
+	};
 
 	const buildOptions = (extraHeaders: IDataObject = {}): IRequestOptions => {
 		const options: IRequestOptions = {
@@ -110,13 +116,25 @@ export async function jenkinsApiRequest(
 			qs,
 			body,
 		};
-		return Object.assign({}, options, option, {
-			headers: {
-				Accept: 'application/json',
-				...extraHeaders,
-				...(option.headers as IDataObject | undefined),
+		return Object.assign(
+			{},
+			options,
+			option,
+			isBuildTrigger
+				? {
+						resolveWithFullResponse: true,
+						followRedirect: false,
+						followAllRedirects: false,
+					}
+				: {},
+			{
+				headers: {
+					Accept: 'application/json',
+					...extraHeaders,
+					...(option.headers as IDataObject | undefined),
+				},
 			},
-		});
+		);
 	};
 
 	const sendRequest = async () => {
@@ -133,11 +151,11 @@ export async function jenkinsApiRequest(
 	};
 
 	try {
-		return await sendRequest();
+		const result = await sendRequest();
+		return isBuildTrigger ? triggerResult(result) : result;
 	} catch (error) {
-		const queueUrl = getQueueItemUrl(error as JsonObject, baseUrl);
-		if (queueUrl) {
-			return { success: true, queueUrl };
+		if (isBuildTrigger && getQueueItemUrl(error as JsonObject, baseUrl)) {
+			return triggerResult(error as JsonObject);
 		}
 
 		throw new NodeApiError(this.getNode(), error as JsonObject);

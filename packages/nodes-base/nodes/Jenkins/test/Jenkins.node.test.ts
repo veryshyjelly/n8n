@@ -305,6 +305,47 @@ describe('Jenkins node', () => {
 	});
 
 	describe('execute', () => {
+		it.each(['trigger', 'triggerParams'])(
+			'returns the queue identity for a %s request accepted with 201',
+			async (operation) => {
+				const executeFunctions = mockDeep<IExecuteFunctions>();
+				executeFunctions.getInputData.mockReturnValue([{ json: {} }]);
+				executeFunctions.getCredentials.mockResolvedValue({
+					username: 'user',
+					apiKey: 'token',
+					baseUrl: 'https://jenkins.example.com',
+				});
+				executeFunctions.getNodeParameter.mockImplementation((name: string) => {
+					if (name === 'resource') return 'job';
+					if (name === 'operation') return operation;
+					if (name === 'job') return 'Team/job/demo-job';
+					if (name === 'param.params') return [];
+					return undefined;
+				});
+				executeFunctions.helpers.returnJsonArray.mockImplementation((data) =>
+					(Array.isArray(data) ? data : [data]).map((json) => ({ json })),
+				);
+				executeFunctions.helpers.request.mockResolvedValue({
+					statusCode: 201,
+					headers: { location: '/queue/item/123/' },
+					body: '',
+				});
+
+				await expect(node.execute.call(executeFunctions)).resolves.toEqual([
+					[
+						{
+							json: {
+								success: true,
+								queueId: 123,
+								queueUrl: 'https://jenkins.example.com/queue/item/123/',
+							},
+						},
+					],
+				]);
+				expect(executeFunctions.helpers.request).toHaveBeenCalledTimes(1);
+			},
+		);
+
 		it('triggers a job with parameters successfully when jenkinsApiRequest returns queue redirect', async () => {
 			const executeFunctions = mockDeep<IExecuteFunctions>();
 			executeFunctions.getInputData.mockReturnValue([{ json: {} }]);
@@ -320,6 +361,7 @@ describe('Jenkins node', () => {
 			});
 			jenkinsApiRequestSpy.mockResolvedValue({
 				success: true,
+				queueId: 42,
 				queueUrl: 'https://jenkins.example.com/queue/item/42/',
 			});
 
@@ -337,7 +379,17 @@ describe('Jenkins node', () => {
 					},
 				},
 			);
-			expect(result).toEqual([[{ json: { success: true } }]]);
+			expect(result).toEqual([
+				[
+					{
+						json: {
+							success: true,
+							queueId: 42,
+							queueUrl: 'https://jenkins.example.com/queue/item/42/',
+						},
+					},
+				],
+			]);
 		});
 
 		it('triggers a parameterless job successfully', async () => {
@@ -401,7 +453,17 @@ describe('Jenkins node', () => {
 
 			const result = await node.execute.call(executeFunctions);
 
-			expect(result).toEqual([[{ json: { success: true } }]]);
+			expect(result).toEqual([
+				[
+					{
+						json: {
+							success: true,
+							queueId: 42,
+							queueUrl: 'https://jenkins.acme.com/queue/item/42/',
+						},
+					},
+				],
+			]);
 			expect(executeFunctions.helpers.request).toHaveBeenCalledTimes(3);
 			expect(executeFunctions.helpers.request).toHaveBeenNthCalledWith(
 				2,

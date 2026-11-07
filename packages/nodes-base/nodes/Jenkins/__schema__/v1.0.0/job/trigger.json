@@ -1,9 +1,17 @@
 {
-    "type": "object",
-    "properties": {
-        "success": {
-            "type": "boolean"
-        }
-    },
-    "version": 1
+	"type": "object",
+	"properties": {
+		"success": {
+			"type": "boolean"
+		},
+		"queueId": {
+			"type": "number",
+			"description": "The ID of the queued Jenkins build."
+		},
+		"queueUrl": {
+			"type": "string",
+			"description": "The URL of the queued Jenkins build."
+		}
+	},
+	"version": 1
 }

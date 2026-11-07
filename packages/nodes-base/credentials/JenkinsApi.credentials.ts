@@ -1,4 +1,4 @@
-import type { ICredentialType, INodeProperties } from 'n8n-workflow';
+import type { IAuthenticateGeneric, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class JenkinsApi implements ICredentialType {
 	name = 'jenkinsApi';
@@ -28,4 +28,14 @@ export class JenkinsApi implements ICredentialType {
 			default: '',
 		},
 	];
+
+	authenticate: IAuthenticateGeneric = {
+		type: 'generic',
+		properties: {
+			auth: {
+				username: '={{$credentials.username}}',
+				password: '={{$credentials.apiKey}}',
+			},
+		},
+	};
 }
